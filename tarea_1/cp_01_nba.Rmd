@@ -1,0 +1,96 @@
+---
+title: "cp_01_nba"
+author: "Antonio Romero Mtnez-Eiroa"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r librerias, message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(gvlma)
+library(MASS)
+library(car)
+```
+
+```{r datos, message = FALSE, warning = FALSE}
+nba <- read_csv("nba.csv")
+View(nba) 
+nba <- rename_with(nba, ~ tolower(gsub('%', '', .x, fixed = T)))
+nba <- rename_with(nba, ~ tolower(gsub('3', 'tres', .x, fixed = T)))
+nba <- rename_with(nba, ~ tolower(gsub('/', '_', .x, fixed = T)))
+nba <- nba[!duplicated(nba), ]
+nba <- na.omit(nba)
+```
+
+
+```{r muestra, message = FALSE, warning = FALSE}
+tam_muestra <- floor(0.8*nrow(nba))
+muestra <- sample(nrow(nba), size = tam_muestra) 
+train <- nba[muestra, ]
+test <- nba[-muestra, ]
+```
+## Regresion inicial
+
+Calculamos la regresion con todas las variables del dataset, excepto las variables categóricas, es decir, nombre del jugador,
+país y equipo.
+```{r regresion, message = FALSE, warning = FALSE}
+regresion = lm(salary~nba_draftnumber + age + g + mp + per + ts + trespar + ftr
+              + orb + drb + trb  + ast + stl + blk + tov + usg + ows + dws + ws 
+              + ws_48 + obpm + dbpm + bpm + vorp,data = train)
+summary(regresion)
+```
+## Test de validación global del modelo lineal
+```{r globtest, message = FALSE, warning = FALSE}
+gvlma(regresion)
+```
+Como se observa, el modelo calculado no cumple las hipótesis para poder asumir su linealidad.
+
+## Análisis de la multicolinealidad
+```{r multicolinealidad, message = FALSE, warning = FALSE}
+vif(regresion)
+sqrt(vif(regresion)) > 2
+```
+Analizamos de multicolinealidad del modelo original.
+```{r multicolinealidad2, message = FALSE, warning = FALSE}
+regresion1 = lm(salary~nba_draftnumber + age + g + mp + per + ts + trespar + ftr
+                + orb + drb + trb  + ast + stl + blk + tov + usg + ows + dws + ws 
+                + ws_48 + obpm + dbpm  + vorp,data = train)
+vif(regresion1)
+sqrt(vif(regresion1)) > 2
+```
+Eliminamos la variable que tiene mayor multicolinealidad y repetimos el proveso.
+```{r multicolinealidad3, message = FALSE, warning = FALSE}
+regresion2 = lm(salary~nba_draftnumber + age + g + mp + per + ts + trespar + ftr
+                + orb + drb + trb  + ast + stl + blk + tov + usg + ows + dws 
+                + ws_48 + obpm + dbpm  + vorp,data = train)
+vif(regresion2)
+sqrt(vif(regresion2)) > 2
+```
+Puesto que la multicolinealidad sigue siendo elevada eliminamos la siguiente variable con mayor multicolinealidad.
+```{r}
+regresion3 = lm(salary~nba_draftnumber + age + g + mp + per + ts + trespar + ftr
+                + orb + drb + ast + stl + blk + tov + usg + ows + dws + ws_48 
+                + obpm + dbpm  + vorp,data = train)
+vif(regresion3)
+sqrt(vif(regresion3)) > 2
+
+```
+Finalmente no quedan variables con demasiada multicolinealidad, por lo que no es necesario eliminar más.
+
+## Selección del modelo
+Mediante el AIC(Criterio de Informacion de Akaike) seleccionamos el modelo con mayor capacidad predictiva.
+Este será el modelo con menor índice AIC.
+```{r}
+stepAIC(regresion3, direction = "both")
+```
+
+En nuestro caso el modelo seleccionado es el siguiente:
+salary ~ nba_draftnumber + age + g + mp + drb + vorp
+
+
